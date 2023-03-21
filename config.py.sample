@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+
+""" Sample configuration file for the bot. """
+
+# Bot token
+TOKEN = ""
+
+# Whitelist of servers (guilds) to operate on. Ignored if left empty.
+SERVER_IDS = [
+]
+
+# Whitelist of users to apply to. Ignored if left empty.
+USER_IDS = [
+]
