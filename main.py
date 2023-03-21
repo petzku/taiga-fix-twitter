@@ -46,7 +46,16 @@ def is_allowed_reply(message):
 def should_spoiler(message):
     return "||" in message.content
 def should_nag(message):
-    return not message.embeds and ("//twitter.com" in message.content or "mobile.twitter.com" in message.content)
+    if not ("//twitter.com" in message.content or "mobile.twitter.com" in message.content):
+        return False
+    if not message.embeds:
+        return True
+    if any(_is_video_tweet(em) for em in message.embeds):
+        return True
+
+def _is_video_tweet(embed):
+    print(embed)
+    return embed.video and "twitter.com" in embed.url
 
 @client.event
 async def on_message(message):
@@ -69,10 +78,6 @@ async def on_message_edit(old, new):
 
     if not should_nag(new):
         await unnag(old)
-
-    # TODO: remove the nag if the user edits the message to remove it again?
-    # probably no, as (AFAIK) I can't tell the difference between deleting/hiding the embed (and relying on the bot)
-    # vs just fixing it into a cdn link, at least not conveniently (not that the current method is very reliable either)
 
 @client.event
 async def on_message_delete(message):
