@@ -35,8 +35,7 @@ async def unnag(message):
         await nags[message.id].delete()
 
 def _allowed_server(guild_id):
-    # accept any guild if whitelist is empty
-    return not config.SERVER_IDS or guild_id in config.SERVER_IDS
+    return not guild_id in config.SERVER_BLACKLIST
 def _allowed_user(user_id):
     # accept any users if whitelist is empty
     return not config.USER_IDS or user_id in config.USER_IDS
