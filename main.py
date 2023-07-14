@@ -21,7 +21,7 @@ async def on_ready():
 
 async def nag(message):
     tweets = twitter_url_regex.findall(message.content)
-    urls = [f"https://fxtwitter.com/{user}/status/{tid}" for user,tid in tweets]
+    urls = [f"https://vxtwitter.com/{user}/status/{tid}" for user,tid in tweets]
     if should_spoiler(message):
         urls = [f"|| {url} ||" for url in urls]
     if urls:
