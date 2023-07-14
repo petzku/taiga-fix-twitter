@@ -6,9 +6,7 @@
 TOKEN = ""
 
 # Blacklist of servers (guilds) to ignore.
-SERVER_BLACKLIST = [
-]
+SERVER_BLACKLIST = []
 
 # Whitelist of users to apply to. Ignored if left empty.
-USER_IDS = [
-]
+USER_IDS = []

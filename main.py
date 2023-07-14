@@ -7,7 +7,9 @@ import time
 # config, contains secrets
 import config
 
-twitter_url_regex = re.compile(r"(?<!<)https?://(?:mobile\.)?twitter\.com/([^/]+)/status/(\d+)(?!\S*>)", re.I)
+twitter_url_regex = re.compile(
+    r"(?<!<)https?://(?:mobile\.)?twitter\.com/([^/]+)/status/(\d+)(?!\S*>)", re.I
+)
 
 nags = {}
 
@@ -15,13 +17,16 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
+
+
 @client.event
 async def on_ready():
-    print('Logged on as', client.user)
+    print("Logged on as", client.user)
+
 
 async def nag(message):
     tweets = twitter_url_regex.findall(message.content)
-    urls = [f"https://vxtwitter.com/{user}/status/{tid}" for user,tid in tweets]
+    urls = [f"https://vxtwitter.com/{user}/status/{tid}" for user, tid in tweets]
     if should_spoiler(message):
         urls = [f"|| {url} ||" for url in urls]
     if urls:
@@ -29,32 +34,47 @@ async def nag(message):
         if not should_nag(message):
             await unnag(message)
 
+
 async def unnag(message):
-    print(f"!! removing response to {message.id} in {message.channel} on {message.guild}")
+    print(
+        f"!! removing response to {message.id} in {message.channel} on {message.guild}"
+    )
     if message.id in nags:
         await nags[message.id].delete()
 
+
 def _allowed_server(guild_id):
     return not guild_id in config.SERVER_BLACKLIST
+
+
 def _allowed_user(user_id):
     # accept any users if whitelist is empty
     return not config.USER_IDS or user_id in config.USER_IDS
+
+
 def is_allowed_reply(message):
     return _allowed_server(message.guild.id) and _allowed_user(message.author.id)
 
+
 def should_spoiler(message):
     return "||" in message.content
+
+
 def should_nag(message):
-    if not ("//twitter.com" in message.content or "mobile.twitter.com" in message.content):
+    if not (
+        "//twitter.com" in message.content or "mobile.twitter.com" in message.content
+    ):
         return False
     if not message.embeds:
         return True
     if any(_is_video_tweet(em) for em in message.embeds):
         return True
 
+
 def _is_video_tweet(embed):
     print(embed)
     return embed.video and "twitter.com" in embed.url
+
 
 @client.event
 async def on_message(message):
@@ -67,6 +87,7 @@ async def on_message(message):
     if should_nag(message):
         await nag(message)
 
+
 # sometimes embeds aren't ready when we see the message. in this case, we should get an on_message_edit once it is.
 @client.event
 async def on_message_edit(old, new):
@@ -78,10 +99,12 @@ async def on_message_edit(old, new):
     if not should_nag(new):
         await unnag(old)
 
+
 @client.event
 async def on_message_delete(message):
     if message.id in nags:
         await unnag(message)
+
 
 if __name__ == "__main__":
     client.run(config.TOKEN)
