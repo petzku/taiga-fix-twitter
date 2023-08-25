@@ -1,0 +1,16 @@
+[Unit]
+Description=Taiga twitter -> fxtwitter link "fixing"
+After=network-online.target
+Wants=network-online.target systemd-networkd-wait-online.service
+
+StartLimitIntervalSec=500
+StartLimitBurst=5
+
+[Service]
+Restart=on-failure
+RestartSec=5s
+
+ExecStart=/path/to/venv/bin/python3 /path/to/main.py
+
+[Install]
+WantedBy=default.target
