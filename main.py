@@ -8,7 +8,7 @@ import time
 import config
 
 twitter_url_regex = re.compile(
-    r"(?<!<)https?://(?:mobile\.)?twitter\.com/([^/]+)/status/(\d+)(?!\S*>)", re.I
+    r"(?<!<)https?://(?:mobile\.)?(?:twitter|x)\.com/([^/]+)/status/(\d+)(?!\S*>)", re.I
 )
 
 nags = {}
@@ -61,9 +61,7 @@ def should_spoiler(message):
 
 
 def should_nag(message):
-    if not (
-        "//twitter.com" in message.content or "mobile.twitter.com" in message.content
-    ):
+    if not re.search(r"(//|mobile\.)(twitter|x)\.com", message.content):
         return False
     if not message.embeds:
         return True
@@ -73,7 +71,7 @@ def should_nag(message):
 
 def _is_video_tweet(embed):
     print(embed)
-    return embed.video and "twitter.com" in embed.url
+    return embed.video and ("twitter.com" in embed.url or "x.com" in embed.url)
 
 
 @client.event
