@@ -61,7 +61,7 @@ def should_spoiler(message):
 
 
 def should_nag(message):
-    if not (re.search(r"(//|mobile\.)(twitter|x)\.com", message.content)):
+    if not re.search(r"(//|mobile\.)(twitter|x)\.com", message.content):
         return False
     if not message.embeds:
         return True
