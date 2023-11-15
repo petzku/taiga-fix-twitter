@@ -8,7 +8,7 @@ import time
 import config
 
 twitter_url_regex = re.compile(
-    r"(?<!<)https?://(?:mobile\.)?twitter\.com/([^/]+)/status/(\d+)(?!\S*>)", re.I
+    r"(?<!<)https?://(?:mobile\.)?(twitter|x)\.com/([^/]+)/status/(\d+)(?!\S*>)", re.I
 )
 
 nags = {}
