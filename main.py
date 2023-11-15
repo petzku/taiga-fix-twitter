@@ -62,7 +62,7 @@ def should_spoiler(message):
 
 def should_nag(message):
     if not (
-        "//twitter.com" in message.content or "mobile.twitter.com" in message.content
+        "//twitter.com" in message.content or "mobile.twitter.com" in message.content or "//x.com" in message.content or "mobile.x.com" in message.content
     ):
         return False
     if not message.embeds:
@@ -73,7 +73,7 @@ def should_nag(message):
 
 def _is_video_tweet(embed):
     print(embed)
-    return embed.video and "twitter.com" in embed.url
+    return embed.video and ("twitter.com" in embed.url or "x.com" in embed.url)
 
 
 @client.event
