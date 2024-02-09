@@ -65,12 +65,17 @@ def _allowed_user(user_id: int) -> bool:
 def is_allowed_reply(message: discord.Message) -> bool:
     """
     Make sure:
-    - Server is not blacklisted
     - User is allowed (if set)
+    - Server is not blacklisted
     """
-    if message.guild is None:
+    if not _allowed_user(message.author.id):
+        # ignore unallowed user
         return False
-    return _allowed_server(message.guild.id) and _allowed_user(message.author.id)
+    if message.guild is None:
+        # private message
+        return True
+    # server message
+    return _allowed_server(message.guild.id)
 
 
 def should_spoiler(message: discord.Message) -> bool:
@@ -80,27 +85,64 @@ def should_spoiler(message: discord.Message) -> bool:
 
 def should_nag(message: discord.Message) -> bool:
     """
-    Only reply if:
-    1. There exists a native twitter link
-    2. There is no existing embed
-    3. There is a video in the tweet
+    Test whether we should respond to the message.
+
+    Requires a native twitter link. Then, checks at least one of the following conditions is met:
+    1. When Twitter embeds break, always reply
+    2. Both channel and at least one embed are marked sensitive
+    3. Embed is safe and there is a video
     """
     if not re.search(r"(//|mobile\.)(twitter|x)\.com", message.content):
         return False
     if not message.embeds:
         return True
+    # sensitive check _must_ be done before other types
+    # to prevent mixing NSFW and SFW links from embedding
+    if any(_is_sensitive_tweet_embed(em) for em in message.embeds):
+        channel = message.channel
+        if channel.type in (discord.ChannelType.private, discord.ChannelType.group):
+            # always allow NSFW in (group) DMs
+            return True
+        if hasattr(channel, "nsfw"):
+            # .nsfw seems to not exist on some channel types
+            # and discord.py type narrowing is limited
+            # so this will have to do
+            return getattr(channel, "nsfw") is True
     if any(_is_video_tweet(em) for em in message.embeds):
         return True
     return False
 
 
 def _is_video_tweet(embed: discord.Embed) -> bool:
-    print(embed)
     if embed.url is None:
         return False
-    is_twitter_media = "twitter.com" in embed.url or "x.com" in embed.url
-    video_exists = embed.video.url is not None
-    return video_exists and is_twitter_media
+    # use the proper regex
+    # to not false match vx/fx when mixed with native
+    is_twitter_embed = twitter_url_regex.match(embed.url) is not None
+    if not is_twitter_embed:
+        return False
+    if embed.image.url is None:
+        return True
+
+    # native video embed now uses a thumbnail instead of broken video
+    # URL begins with https://pbs.twimg.com/ext_tw_video_thumb/
+    contains_video_thumbnail = "ext_tw_video_thumb" in embed.image.url
+    return contains_video_thumbnail
+
+
+def _is_sensitive_tweet_embed(embed: discord.Embed) -> bool:
+    if embed.url is None:
+        return False
+    # use the proper regex
+    # to not false match vx/fx when mixed with native
+    is_twitter_embed = twitter_url_regex.match(embed.url) is not None
+    if not is_twitter_embed:
+        return False
+    if embed.image.url is None and embed.description is None:
+        # Twitter returns a fake rich embed
+        # When media is sensitive
+        return True
+    return False
 
 
 @client.event
@@ -108,7 +150,8 @@ async def on_message(message: discord.Message) -> None:
     """
     Check every message send
     """
-    if message.author == client.user:
+    if message.author.bot:
+        # ignore bots and self
         return
     if not is_allowed_reply(message):
         return
@@ -123,8 +166,8 @@ async def on_message_edit(old: discord.Message, new: discord.Message) -> None:
     Sometimes embeds aren't ready when we see the message.
     In this case, we should get an on_message_edit once it is.
     """
-    if new.author == client.user:
-        # ignore self
+    if new.author.bot:
+        # ignore bots and self
         return
     if not is_allowed_reply(new):
         return
