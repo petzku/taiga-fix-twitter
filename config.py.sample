@@ -2,11 +2,13 @@
 
 """ Sample configuration file for the bot. """
 
+from typing import List
+
 # Bot token
-TOKEN = ""
+TOKEN: str = ""
 
 # Blacklist of servers (guilds) to ignore.
-SERVER_BLACKLIST = []
+SERVER_BLACKLIST: List[int] = []
 
 # Whitelist of users to apply to. Ignored if left empty.
-USER_IDS = []
+USER_IDS: List[int] = []

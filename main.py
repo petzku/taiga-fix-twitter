@@ -3,6 +3,7 @@
 """
 Discord twitter -> vx bot
 """
+from __future__ import annotations
 import re
 import discord
 
@@ -13,7 +14,7 @@ twitter_url_regex = re.compile(
     r"(?<!<)https?://(?:mobile\.)?(?:twitter|x)\.com/([^/]+)/status/(\d+)(?!\S*>)", re.I
 )
 
-nags = {}
+nags: dict[int, discord.Message] = {}
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -22,12 +23,12 @@ client = discord.Client(intents=intents)
 
 
 @client.event
-async def on_ready():
+async def on_ready() -> None:
     """Log client information on start"""
     print("Logged on as", client.user)
 
 
-async def nag(message):
+async def nag(message: discord.Message) -> None:
     """
     Post vxtwitter link in response to a native twitter link
     """
@@ -41,7 +42,7 @@ async def nag(message):
             await unnag(message)
 
 
-async def unnag(message):
+async def unnag(message: discord.Message) -> None:
     """
     Remove the vxtwitter link
     """
@@ -52,30 +53,32 @@ async def unnag(message):
         await nags[message.id].delete()
 
 
-def _allowed_server(guild_id):
+def _allowed_server(guild_id: int) -> bool:
     return not guild_id in config.SERVER_BLACKLIST
 
 
-def _allowed_user(user_id):
+def _allowed_user(user_id: int) -> bool:
     # accept any users if whitelist is empty
     return not config.USER_IDS or user_id in config.USER_IDS
 
 
-def is_allowed_reply(message):
+def is_allowed_reply(message: discord.Message) -> bool:
     """
     Make sure:
     - Server is not blacklisted
     - User is allowed (if set)
     """
+    if message.guild is None:
+        return False
     return _allowed_server(message.guild.id) and _allowed_user(message.author.id)
 
 
-def should_spoiler(message):
+def should_spoiler(message: discord.Message) -> bool:
     """Rough detection of spoilered content"""
     return "||" in message.content
 
 
-def should_nag(message):
+def should_nag(message: discord.Message) -> bool:
     """
     Only reply if:
     1. There exists a native twitter link
@@ -91,13 +94,17 @@ def should_nag(message):
     return False
 
 
-def _is_video_tweet(embed):
+def _is_video_tweet(embed: discord.Embed) -> bool:
     print(embed)
-    return embed.video and ("twitter.com" in embed.url or "x.com" in embed.url)
+    if embed.url is None:
+        return False
+    is_twitter_media = "twitter.com" in embed.url or "x.com" in embed.url
+    video_exists = embed.video.url is not None
+    return video_exists and is_twitter_media
 
 
 @client.event
-async def on_message(message):
+async def on_message(message: discord.Message) -> None:
     """
     Check every message send
     """
@@ -111,12 +118,13 @@ async def on_message(message):
 
 
 @client.event
-async def on_message_edit(old, new):
+async def on_message_edit(old: discord.Message, new: discord.Message) -> None:
     """
     Sometimes embeds aren't ready when we see the message.
     In this case, we should get an on_message_edit once it is.
     """
     if new.author == client.user:
+        # ignore self
         return
     if not is_allowed_reply(new):
         return
@@ -126,7 +134,7 @@ async def on_message_edit(old, new):
 
 
 @client.event
-async def on_message_delete(message):
+async def on_message_delete(message: discord.Message) -> None:
     """
     Follow original and delete the message
     """
