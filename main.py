@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
 """
-Discord twitter -> vx bot
+Discord twitter -> fx bot
 """
 from __future__ import annotations
+from enum import Enum
+from typing import Optional, TypedDict, Any
 import re
+import requests
 import discord
 
 # config, contains secrets
@@ -12,6 +15,20 @@ import config
 
 twitter_url_regex = re.compile(
     r"(?<!<)https?://(?:mobile\.)?(?:twitter|x)\.com/([^/]+)/status/(\d+)(?!\S*>)", re.I
+)
+
+NagType = Enum(
+    "NagType",
+    [
+        # normal fx link
+        "FULL",
+        # g.fx media embed
+        "VIDEO",
+        # g.fx/photos/2 media embed
+        "SECOND_IMAGE",
+        # g.fx media embed
+        "MOSAIC",
+    ],
 )
 
 nags: dict[int, discord.Message] = {}
@@ -22,29 +39,96 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 
 
+class FxMedia(TypedDict):
+    """
+    Partial Media representation from Fx API
+    """
+
+    # we only care about how many media there are
+    all: list[Any]
+
+
+class FxTweet(TypedDict):
+    """
+    Partial Tweet representation from Fx API
+    """
+
+    media: Optional[FxMedia]
+
+
+class FxResponse(TypedDict):
+    """
+    Top-level response from the Fx API
+    """
+
+    code: int
+    message: str
+    tweet: Optional[FxTweet]
+
+
+def get_fx_nagtype(user: str, tid: str) -> Optional[NagType]:
+    """
+    Request additional data from FxTwitter
+    to determine what embed type to use
+    """
+    try:
+        response = requests.get(
+            f"https://api.fxtwitter.com/{user}/status/{tid}", timeout=3
+        )
+        response.raise_for_status()
+        fx_res: FxResponse = response.json()
+        tweet = fx_res.get("tweet")
+        if tweet is None:
+            # tweet no longer exists
+            return None
+        media = tweet.get("media")
+        if media is None:
+            # text-only tweet
+            return None
+        media_all = media.get("all")
+        if len(media_all) == 1:
+            # original already embedded
+            return None
+        if len(media_all) == 2:
+            # special case for 2-image tweets
+            return NagType.SECOND_IMAGE
+        # every other case
+        return NagType.MOSAIC
+
+    except requests.HTTPError:
+        # can't access API, just be safe and respond with a mosaic
+        return NagType.MOSAIC
+
+
 @client.event
 async def on_ready() -> None:
     """Log client information on start"""
     print("Logged on as", client.user)
 
 
-async def nag(message: discord.Message) -> None:
+async def nag(message: discord.Message, nag_type: NagType) -> None:
     """
-    Post vxtwitter link in response to a native twitter link
+    Post normal fxtwitter link in response to a native twitter link
     """
-    tweets = twitter_url_regex.findall(message.content)
-    urls = [f"https://vxtwitter.com/{user}/status/{tid}" for user, tid in tweets]
+    tweets: list[tuple[str, str]] = twitter_url_regex.findall(message.content)
+    base = "https://fxtwitter.com"
+    modifier = ""
+    if nag_type is not NagType.FULL:
+        base = "https://g.fxtwitter.com"
+        if nag_type is NagType.SECOND_IMAGE:
+            modifier = "/photos/2"
+    urls = [f"{base}/{user}/status/{tid}{modifier}" for user, tid in tweets]
     if should_spoiler(message):
         urls = [f"|| {url} ||" for url in urls]
     if urls:
         nags[message.id] = await message.reply("\n".join(urls), mention_author=False)
-        if not should_nag(message):
+        if should_nag(message) is None:
             await unnag(message)
 
 
 async def unnag(message: discord.Message) -> None:
     """
-    Remove the vxtwitter link
+    Remove the fxtwitter link
     """
     print(
         f"!! removing response to {message.id} in {message.channel} on {message.guild}"
@@ -83,7 +167,7 @@ def should_spoiler(message: discord.Message) -> bool:
     return "||" in message.content
 
 
-def should_nag(message: discord.Message) -> bool:
+def should_nag(message: discord.Message) -> Optional[NagType]:
     """
     Test whether we should respond to the message.
 
@@ -93,24 +177,31 @@ def should_nag(message: discord.Message) -> bool:
     3. Embed is safe and there is a video
     """
     if not re.search(r"(//|mobile\.)(twitter|x)\.com", message.content):
-        return False
+        return None
     if not message.embeds:
-        return True
+        return NagType.FULL
     # sensitive check _must_ be done before other types
     # to prevent mixing NSFW and SFW links from embedding
     if any(_is_sensitive_tweet_embed(em) for em in message.embeds):
         channel = message.channel
         if channel.type in (discord.ChannelType.private, discord.ChannelType.group):
             # always allow NSFW in (group) DMs
-            return True
-        if hasattr(channel, "nsfw"):
+            return NagType.FULL
+        if hasattr(channel, "nsfw") and getattr(channel, "nsfw") is True:
             # .nsfw seems to not exist on some channel types
             # and discord.py type narrowing is limited
-            # so this will have to do
-            return getattr(channel, "nsfw") is True
+            return NagType.FULL
+        # nsfw in sfw channel, prevent embed
+        print("Skipping NSFW embed in SFW channel")
+        return None
     if any(_is_video_tweet(em) for em in message.embeds):
-        return True
-    return False
+        return NagType.VIDEO
+    # remaining case is POTENTIALLY multi-image, check fx API
+    tweets: list[tuple[str, str]] = twitter_url_regex.findall(message.content)
+    for user, tid in tweets:
+        # if there's at least one, return the first nag type
+        return get_fx_nagtype(user, tid)
+    return None
 
 
 def _is_video_tweet(embed: discord.Embed) -> bool:
@@ -122,12 +213,14 @@ def _is_video_tweet(embed: discord.Embed) -> bool:
     if not is_twitter_embed:
         return False
     if embed.image.url is None:
-        return True
+        return False
 
     # native video embed now uses a thumbnail instead of broken video
     # URL begins with https://pbs.twimg.com/ext_tw_video_thumb/
+    # or https://pbs.twimg.com/tweet_video_thumb/
     contains_video_thumbnail = "ext_tw_video_thumb" in embed.image.url
-    return contains_video_thumbnail
+    contains_gif_thumbnail = "tweet_video_thumb" in embed.image.url
+    return contains_video_thumbnail or contains_gif_thumbnail
 
 
 def _is_sensitive_tweet_embed(embed: discord.Embed) -> bool:
@@ -156,8 +249,9 @@ async def on_message(message: discord.Message) -> None:
     if not is_allowed_reply(message):
         return
 
-    if should_nag(message):
-        await nag(message)
+    nag_type = should_nag(message)
+    if nag_type is not None:
+        await nag(message, nag_type)
 
 
 @client.event
@@ -172,8 +266,17 @@ async def on_message_edit(old: discord.Message, new: discord.Message) -> None:
     if not is_allowed_reply(new):
         return
 
-    if not should_nag(new):
+    old_nag_type = should_nag(old)
+    new_nag_type = should_nag(new)
+
+    if new_nag_type is None:
         await unnag(old)
+    elif new_nag_type != old_nag_type:
+        # message edited with different link
+        # or embed type changed
+        if old_nag_type is not None:
+            await unnag(old)
+        await nag(new, new_nag_type)
 
 
 @client.event
