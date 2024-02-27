@@ -198,9 +198,10 @@ def should_nag(message: discord.Message) -> Optional[NagType]:
                     discord.ForumChannel,
                     discord.StageChannel,
                     discord.VoiceChannel,
+                    discord.Thread,
                 ),
             )
-            and channel.nsfw
+            and channel.is_nsfw()
         ):
             return NagType.FULL
         # nsfw in sfw channel, prevent embed
