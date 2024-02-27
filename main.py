@@ -312,9 +312,6 @@ async def on_message_edit(old: discord.Message, new: discord.Message) -> None:
     Sometimes embeds aren't ready when we see the message.
     In this case, we should get an on_message_edit once it is.
     """
-    # reset cache on message edit
-    # unlikely to reuse cache
-    fx_cache.clear()
     if new.author.bot:
         # ignore bots and self
         return
