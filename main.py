@@ -5,7 +5,7 @@ Discord twitter -> fx bot
 """
 from __future__ import annotations
 from enum import Enum
-from typing import Optional, TypedDict, Any, Protocol
+from typing import Optional, TypedDict, Any, Protocol, runtime_checkable
 import re
 import requests
 import discord
@@ -14,6 +14,7 @@ import discord
 import config
 
 
+@runtime_checkable
 class HasNsfwProperty(Protocol):
     def is_nsfw(self) -> bool: ...
 
