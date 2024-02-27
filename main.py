@@ -279,9 +279,7 @@ def _is_video_tweet(embed: discord.Embed) -> bool:
     # native video embed now uses a thumbnail instead of broken video
     # URL begins with https://pbs.twimg.com/ext_tw_video_thumb/
     # or https://pbs.twimg.com/tweet_video_thumb/
-    contains_video_thumbnail = "ext_tw_video_thumb" in embed.image.url
-    contains_gif_thumbnail = "tweet_video_thumb" in embed.image.url
-    return contains_video_thumbnail or contains_gif_thumbnail
+    return "_video_thumb/" in embed.image.url
 
 
 def _has_sensitive_tweet(message: discord.Message) -> bool:
