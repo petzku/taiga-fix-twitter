@@ -32,6 +32,7 @@ NagType = Enum(
 )
 
 nags: dict[int, discord.Message] = {}
+fx_cache: dict[str, FxResponse] = {}
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -54,6 +55,7 @@ class FxTweet(TypedDict):
     """
 
     media: Optional[FxMedia]
+    possibly_sensitive: bool
 
 
 class FxResponse(TypedDict):
@@ -66,17 +68,28 @@ class FxResponse(TypedDict):
     tweet: Optional[FxTweet]
 
 
+def fx_request(author: str, tweet_id: str) -> FxResponse:
+    """
+    Return a cached FxRequest if it exists
+    or request a fresh one if not
+    """
+    if fx_cache.get(tweet_id) is None:
+        response = requests.get(
+            f"https://api.fxtwitter.com/{author}/status/{tweet_id}", timeout=3
+        )
+        response.raise_for_status()
+        fx_res: FxResponse = response.json()
+        fx_cache[tweet_id] = fx_res
+    return fx_cache[tweet_id]
+
+
 def get_fx_nagtype(user: str, tid: str) -> Optional[NagType]:
     """
     Request additional data from FxTwitter
     to determine what embed type to use
     """
     try:
-        response = requests.get(
-            f"https://api.fxtwitter.com/{user}/status/{tid}", timeout=3
-        )
-        response.raise_for_status()
-        fx_res: FxResponse = response.json()
+        fx_res: FxResponse = fx_request(user, tid)
         tweet = fx_res.get("tweet")
         if tweet is None:
             # tweet no longer exists
@@ -98,6 +111,21 @@ def get_fx_nagtype(user: str, tid: str) -> Optional[NagType]:
     except requests.HTTPError:
         # can't access API, just be safe and respond with a mosaic
         return NagType.MOSAIC
+
+
+def is_fx_sensitive(author: str, tweet_id: str) -> bool:
+    """
+    True if tweet is marked possibly sensitive by Twitter
+    """
+    try:
+        fx_res: FxResponse = fx_request(author, tweet_id)
+        tweet = fx_res.get("tweet")
+        if tweet is None:
+            return False
+        return tweet.get("possibly_sensitive")
+    except requests.HTTPError:
+        # can't access API, be safe and assume sensitive
+        return True
 
 
 @client.event
@@ -174,18 +202,17 @@ def should_nag(message: discord.Message) -> Optional[NagType]:
     """
     Test whether we should respond to the message.
 
-    Requires a native twitter link. Then, checks at least one of the following conditions is met:
-    1. When Twitter embeds break, always reply
-    2. Both channel and at least one embed are marked sensitive
-    3. Embed is safe and there is a video
+    Requires a native twitter link. Then, checks at least one of the following conditions is met before posting:
+    - If the post has at least one NSFW tweet, channel must be NSFW
+        - When Twitter embeds break, always check Fx for NSFW status
+    - Embed is safe and there is a video
+    - Embed is safe and has multiple images
     """
     if not re.search(r"(//|mobile\.)(twitter|x)\.com", message.content):
         return None
-    if not message.embeds:
-        return NagType.FULL
     # sensitive check _must_ be done before other types
     # to prevent mixing NSFW and SFW links from embedding
-    if any(_is_sensitive_tweet_embed(em) for em in message.embeds):
+    if _has_sensitive_tweet(message):
         channel = message.channel
         if channel.type in (discord.ChannelType.private, discord.ChannelType.group):
             # always allow NSFW in (group) DMs
@@ -211,9 +238,30 @@ def should_nag(message: discord.Message) -> Optional[NagType]:
         return NagType.VIDEO
     # remaining case is POTENTIALLY multi-image, check fx API
     tweets: list[tuple[str, str]] = twitter_url_regex.findall(message.content)
-    for user, tid in tweets:
-        # if there's at least one, return the first nag type
-        return get_fx_nagtype(user, tid)
+
+    # use the most restrictive nag type
+    if any(get_fx_nagtype(author, tweet_id) is None for author, tweet_id in tweets):
+        # possibly NSFW
+        return None
+    if any(
+        get_fx_nagtype(author, tweet_id) is NagType.FULL for author, tweet_id in tweets
+    ):
+        return NagType.FULL
+    if any(
+        get_fx_nagtype(author, tweet_id) is NagType.MOSAIC
+        for author, tweet_id in tweets
+    ):
+        return NagType.MOSAIC
+    if any(
+        get_fx_nagtype(author, tweet_id) is NagType.VIDEO for author, tweet_id in tweets
+    ):
+        return NagType.VIDEO
+    if any(
+        get_fx_nagtype(author, tweet_id) is NagType.SECOND_IMAGE
+        for author, tweet_id in tweets
+    ):
+        return NagType.SECOND_IMAGE
+    # all tweets are single-image only, no need to respond
     return None
 
 
@@ -236,17 +284,9 @@ def _is_video_tweet(embed: discord.Embed) -> bool:
     return contains_video_thumbnail or contains_gif_thumbnail
 
 
-def _is_sensitive_tweet_embed(embed: discord.Embed) -> bool:
-    if embed.url is None:
-        return False
-    # use the proper regex
-    # to not false match vx/fx when mixed with native
-    is_twitter_embed = twitter_url_regex.match(embed.url) is not None
-    if not is_twitter_embed:
-        return False
-    if embed.image.url is None and embed.description is None:
-        # Twitter returns a fake rich embed
-        # When media is sensitive
+def _has_sensitive_tweet(message: discord.Message) -> bool:
+    tweets: list[tuple[str, str]] = twitter_url_regex.findall(message.content)
+    if any(is_fx_sensitive(author, tweet_id) for author, tweet_id in tweets):
         return True
     return False
 
@@ -256,6 +296,9 @@ async def on_message(message: discord.Message) -> None:
     """
     Check every message send
     """
+    # reset cache on new messages
+    # unlikely to reuse cache
+    fx_cache.clear()
     if message.author.bot:
         # ignore bots and self
         return
@@ -273,6 +316,9 @@ async def on_message_edit(old: discord.Message, new: discord.Message) -> None:
     Sometimes embeds aren't ready when we see the message.
     In this case, we should get an on_message_edit once it is.
     """
+    # reset cache on message edit
+    # unlikely to reuse cache
+    fx_cache.clear()
     if new.author.bot:
         # ignore bots and self
         return
