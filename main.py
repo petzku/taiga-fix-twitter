@@ -190,9 +190,18 @@ def should_nag(message: discord.Message) -> Optional[NagType]:
         if channel.type in (discord.ChannelType.private, discord.ChannelType.group):
             # always allow NSFW in (group) DMs
             return NagType.FULL
-        if hasattr(channel, "nsfw") and getattr(channel, "nsfw") is True:
-            # .nsfw seems to not exist on some channel types
-            # and discord.py type narrowing is limited
+        if (
+            isinstance(
+                channel,
+                (
+                    discord.TextChannel,
+                    discord.ForumChannel,
+                    discord.StageChannel,
+                    discord.VoiceChannel,
+                ),
+            )
+            and channel.nsfw
+        ):
             return NagType.FULL
         # nsfw in sfw channel, prevent embed
         print("Skipping NSFW embed in SFW channel")
