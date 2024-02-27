@@ -228,30 +228,23 @@ def should_nag(message: discord.Message) -> Optional[NagType]:
     if any(_is_video_tweet(em) for em in message.embeds):
         return NagType.VIDEO
     # remaining case is POTENTIALLY multi-image, check fx API
-    tweets: list[tuple[str, str]] = twitter_url_regex.findall(message.content)
+    nag_types = [
+        get_fx_nagtype(author, tweet_id)
+        for author, tweet_id in twitter_url_regex.findall(message.content)
+    ]
 
     # use the most restrictive nag type
-    if any(get_fx_nagtype(author, tweet_id) is None for author, tweet_id in tweets):
-        # possibly NSFW
-        return None
-    if any(
-        get_fx_nagtype(author, tweet_id) is NagType.FULL for author, tweet_id in tweets
+    # get_fx_nagtype currently doesn't return NagType.VIDEO, but this might change in the future
+    # => leave the (basically zero-cost) check in to avoid unfortunate bugs later
+    for nag_type in (
+        None,
+        NagType.FULL,
+        NagType.MOSAIC,
+        NagType.VIDEO,
+        NagType.SECOND_IMAGE,
     ):
-        return NagType.FULL
-    if any(
-        get_fx_nagtype(author, tweet_id) is NagType.MOSAIC
-        for author, tweet_id in tweets
-    ):
-        return NagType.MOSAIC
-    if any(
-        get_fx_nagtype(author, tweet_id) is NagType.VIDEO for author, tweet_id in tweets
-    ):
-        return NagType.VIDEO
-    if any(
-        get_fx_nagtype(author, tweet_id) is NagType.SECOND_IMAGE
-        for author, tweet_id in tweets
-    ):
-        return NagType.SECOND_IMAGE
+        if nag_type in nag_types:
+            return nag_type
     # all tweets are single-image only, no need to respond
     return None
 
