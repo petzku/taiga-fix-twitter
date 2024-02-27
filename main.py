@@ -5,13 +5,18 @@ Discord twitter -> fx bot
 """
 from __future__ import annotations
 from enum import Enum
-from typing import Optional, TypedDict, Any
+from typing import Optional, TypedDict, Any, Protocol
 import re
 import requests
 import discord
 
 # config, contains secrets
 import config
+
+
+class HasNsfwProperty(Protocol):
+    def is_nsfw(self) -> bool: ...
+
 
 twitter_url_regex = re.compile(
     r"(?<!<)https?://(?:mobile\.)?(?:twitter|x)\.com/([^/]+)/status/(\d+)(?!\S*>)", re.I
@@ -212,22 +217,10 @@ def should_nag(message: discord.Message) -> Optional[NagType]:
     # to prevent mixing NSFW and SFW links from embedding
     if _has_sensitive_tweet(message):
         channel = message.channel
-        if channel.type in (discord.ChannelType.private, discord.ChannelType.group):
+        if isinstance(channel, (discord.DMChannel, discord.GroupChannel)):
             # always allow NSFW in (group) DMs
             return NagType.FULL
-        if (
-            isinstance(
-                channel,
-                (
-                    discord.TextChannel,
-                    discord.ForumChannel,
-                    discord.StageChannel,
-                    discord.VoiceChannel,
-                    discord.Thread,
-                ),
-            )
-            and channel.is_nsfw()
-        ):
+        if isinstance(channel, HasNsfwProperty) and channel.is_nsfw():
             return NagType.FULL
         # nsfw in sfw channel, prevent embed
         print("Skipping NSFW embed in SFW channel")
