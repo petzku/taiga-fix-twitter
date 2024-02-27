@@ -159,9 +159,7 @@ async def unnag(message: discord.Message) -> None:
     Remove the fxtwitter link
     """
     if message.id in nags:
-        guild_string = ""
-        if message.guild is not None:
-            guild_string = f"on {message.guild.id}"
+        guild_string = f"on {message.guild.id}" if message.guild is not None else ""
         print(
             f"!! removing response to {message.id} in {message.channel.id}{guild_string}"
         )
