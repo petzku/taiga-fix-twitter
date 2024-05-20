@@ -174,8 +174,17 @@ async def unnag(message: discord.Message) -> None:
         mid = next((p for p, m in nags.items() if m == message))
     else:
         return
-    guild_string = f"on {message.guild.id}" if message.guild is not None else ""
-    print(f"!! removing response to {mid} in {message.channel.id}{guild_string}")
+    guild_string = (
+        f" on {message.guild.name} ({message.guild.id})"
+        if message.guild is not None
+        else ""
+    )
+    channel_string = (
+        f"#{message.channel.name} ({message.channel.id})"
+        if message.channel.type != discord.ChannelType.private
+        else f"@{message.channel.recipient} ({message.channel.id})"
+    )
+    print(f"!! removing response to {mid} in {channel_string}{guild_string}")
     await nags.pop(mid).delete()
 
 
