@@ -34,6 +34,8 @@ NagType = Enum(
         "SECOND_IMAGE",
         # g.fx media embed
         "MOSAIC",
+        # fx link of quoted tweet
+        "QUOTE",
     ],
 )
 
@@ -155,7 +157,9 @@ async def nag(message: discord.Message, nag_type: NagType) -> None:
     if should_spoiler(message):
         urls = [f"|| {url} ||" for url in urls]
     if urls:
-        nags[message.id] = await message.reply("\n".join(urls), mention_author=False)
+        nags[message.id] = await message.reply(
+            "test " + "\n".join(urls), mention_author=False
+        )
         if should_nag(message) is None:
             await unnag(message)
 
@@ -189,6 +193,7 @@ async def unnag(message: discord.Message) -> None:
 
 
 def _allowed_server(guild_id: int) -> bool:
+    return guild_id == 808282188286001163
     return not guild_id in config.SERVER_BLACKLIST
 
 
@@ -344,9 +349,7 @@ async def on_message_edit(old: discord.Message, new: discord.Message) -> None:
 
 
 @client.event
-async def on_reaction_add(
-    reaction: discord.Reaction, user: discord.User | discord.Member
-) -> None:
+async def on_reaction_add(reaction: discord.Reaction, _user) -> None:
     # only accept reactions on our sent messages
     if reaction.message not in nags.values():
         return
