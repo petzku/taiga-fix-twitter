@@ -319,6 +319,18 @@ async def on_message_edit(old: discord.Message, new: discord.Message) -> None:
 
 
 @client.event
+async def on_reaction_add(
+    reaction: discord.Reaction, user: discord.User | discord.Member
+) -> None:
+    # only accept reactions on our sent messages
+    if reaction.message not in nags.values():
+        return
+    if reaction.emoji == "❌":
+        parent = next((p for p, m in nags.items() if m == reaction.message))
+        await nags.pop(parent).delete()
+
+
+@client.event
 async def on_message_delete(message: discord.Message) -> None:
     """
     Follow original and delete the message
