@@ -162,14 +162,21 @@ async def nag(message: discord.Message, nag_type: NagType) -> None:
 
 async def unnag(message: discord.Message) -> None:
     """
-    Remove the fxtwitter link
+    Remove the fxtwitter link reply
+
+    Param can be the parent message or our reply
     """
-    if message.id in nags:
-        guild_string = f"on {message.guild.id}" if message.guild is not None else ""
-        print(
-            f"!! removing response to {message.id} in {message.channel.id}{guild_string}"
-        )
-        await nags.pop(message.id).delete()
+    if message.id in nags.keys():
+        # parent message
+        mid = message.id
+    elif message in nags.values():
+        # our message
+        mid = next((p for p, m in nags.items() if m == message))
+    else:
+        return
+    guild_string = f"on {message.guild.id}" if message.guild is not None else ""
+    print(f"!! removing response to {mid} in {message.channel.id}{guild_string}")
+    await nags.pop(mid).delete()
 
 
 def _allowed_server(guild_id: int) -> bool:
@@ -335,8 +342,7 @@ async def on_reaction_add(
     if reaction.message not in nags.values():
         return
     if is_accepted_reaction(reaction.emoji):
-        parent = next((p for p, m in nags.items() if m == reaction.message))
-        await nags.pop(parent).delete()
+        await unnag(reaction.message)
 
 
 @client.event
