@@ -169,7 +169,7 @@ async def unnag(message: discord.Message) -> None:
         print(
             f"!! removing response to {message.id} in {message.channel.id}{guild_string}"
         )
-        await nags[message.id].delete()
+        await nags.pop(message.id).delete()
 
 
 def _allowed_server(guild_id: int) -> bool:
