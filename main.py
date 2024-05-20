@@ -274,6 +274,15 @@ def _has_sensitive_tweet(message: discord.Message) -> bool:
     return False
 
 
+def is_accepted_reaction(react: str | discord.PartialEmoji | discord.Emoji) -> bool:
+    if type(react) != str:
+        react = react.name
+    if type(config.REMOVE_REACTIONS) == list:
+        return react in config.REMOVE_REACTIONS
+    else:
+        return react == config.REMOVE_REACTIONS
+
+
 @client.event
 async def on_message(message: discord.Message) -> None:
     """
@@ -325,7 +334,7 @@ async def on_reaction_add(
     # only accept reactions on our sent messages
     if reaction.message not in nags.values():
         return
-    if reaction.emoji == "❌":
+    if is_accepted_reaction(reaction.emoji):
         parent = next((p for p, m in nags.items() if m == reaction.message))
         await nags.pop(parent).delete()
 
