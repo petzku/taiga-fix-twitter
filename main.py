@@ -344,9 +344,7 @@ async def on_message_edit(old: discord.Message, new: discord.Message) -> None:
 
 
 @client.event
-async def on_reaction_add(
-    reaction: discord.Reaction, user: discord.User | discord.Member
-) -> None:
+async def on_reaction_add(reaction: discord.Reaction, _user) -> None:
     # only accept reactions on our sent messages
     if reaction.message not in nags.values():
         return
