@@ -12,3 +12,7 @@ SERVER_BLACKLIST: List[int] = []
 
 # Whitelist of users to apply to. Ignored if left empty.
 USER_IDS: List[int] = []
+
+# Reaction name(s) to accept as "remove response" triggers
+# Can be an unicode emoji, or the name of a reaction, or a list thereof.
+REMOVE_REACTIONS: str | list[str] = "❌"
