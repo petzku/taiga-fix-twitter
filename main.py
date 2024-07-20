@@ -162,14 +162,30 @@ async def nag(message: discord.Message, nag_type: NagType) -> None:
 
 async def unnag(message: discord.Message) -> None:
     """
-    Remove the fxtwitter link
+    Remove the fxtwitter link reply
+
+    Param can be the parent message or our reply
     """
-    if message.id in nags:
-        guild_string = f"on {message.guild.id}" if message.guild is not None else ""
-        print(
-            f"!! removing response to {message.id} in {message.channel.id}{guild_string}"
-        )
-        await nags[message.id].delete()
+    if message.id in nags.keys():
+        # parent message
+        mid = message.id
+    elif message in nags.values():
+        # our message
+        mid = next((p for p, m in nags.items() if m == message))
+    else:
+        return
+    guild_string = (
+        f" on {message.guild.name} ({message.guild.id})"
+        if message.guild is not None
+        else ""
+    )
+    channel_string = (
+        f"#{message.channel.name} ({message.channel.id})"
+        if message.channel.type != discord.ChannelType.private
+        else f"@{message.channel.recipient} ({message.channel.id})"
+    )
+    print(f"!! removing response to {mid} in {channel_string}{guild_string}")
+    await nags.pop(mid).delete()
 
 
 def _allowed_server(guild_id: int) -> bool:
@@ -274,6 +290,15 @@ def _has_sensitive_tweet(message: discord.Message) -> bool:
     return False
 
 
+def is_accepted_reaction(react: str | discord.PartialEmoji | discord.Emoji) -> bool:
+    if type(react) != str:
+        react = react.name
+    if type(config.REMOVE_REACTIONS) == list:
+        return react in config.REMOVE_REACTIONS
+    else:
+        return react == config.REMOVE_REACTIONS
+
+
 @client.event
 async def on_message(message: discord.Message) -> None:
     """
@@ -316,6 +341,15 @@ async def on_message_edit(old: discord.Message, new: discord.Message) -> None:
         if old_nag_type is not None:
             await unnag(old)
         await nag(new, new_nag_type)
+
+
+@client.event
+async def on_reaction_add(reaction: discord.Reaction, _user) -> None:
+    # only accept reactions on our sent messages
+    if reaction.message not in nags.values():
+        return
+    if is_accepted_reaction(reaction.emoji):
+        await unnag(reaction.message)
 
 
 @client.event
