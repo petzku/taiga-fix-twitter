@@ -51,8 +51,10 @@ class FxMedia(TypedDict):
     Partial Media representation from Fx API
     """
 
-    # we only care about how many media there are
+    # we only care about how many and what types of media there are
     all: list[Any]
+    photos: Optional[list]
+    videos: Optional[list]
 
 
 class FxTweet(TypedDict):
@@ -104,6 +106,9 @@ def get_fx_nagtype(user: str, tid: str) -> Optional[NagType]:
         if media is None:
             # text-only tweet
             return None
+        if media.get("videos"):
+            # special case: image URLs did not match video format, but tweet has video
+            return NagType.VIDEO
         media_all = media.get("all")
         if len(media_all) == 1:
             # original already embedded
